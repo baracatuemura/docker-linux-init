@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+echo "---"
+read -p "Project name? [mymagento2] " project_name
+read -p "PHP version? [7.0] " php_version
+echo "---"
+if [ "$project_name" == "" ]; then
+    project_name="mymagento2"
+fi
+if [ "$php_version" == "" ]; then
+	php_version="7.0"
+fi
+
+domain=$(echo "$project_name"  | sed 's/[^[[:alnum:]]]*//g')
+read -p "Do you want to create http://$domain.local? [n] " -n 1 -r create_domain
+if [ "$create_domain" == "y" ]; then
+	echo " "
+	echo " "
+	read -p "Docker Server IP? [127.0.0.1] " server_ip
+	echo "-----------"
+	if [ "$server_ip" == "" ]; then
+		server_ip="127.0.0.1"
+	fi
+fi 
+
+echo "-----------"
+echo "Installing project: $project_name [PHP $php_version]"
+echo "-----------"
+git clone https://github.com/redstage/docker-linux-m2-v2.git;
+mv docker-linux-m2-v2 $project_name;
+
+
+if [ "$create_domain" == "y" ]; then
+	sleep 1
+	sed -i '' -e "s/\#  ServerName dev/ServerName $domain/g" $project_name/.docker/config/magento.conf.dist;
+	sed -i '' -e "s/\#  ServerAlias www.dev/ServerAlias $domain/g" $project_name/.docker/config/magento.conf.dist;
+	sed -i '' -e "s/\#  ServerName dev/ServerName $domain/g" $project_name/.docker/config/magento.ssl.conf.dist;
+	sed -i '' -e "s/\#  ServerAlias www.dev/ServerAlias $domain/g" $project_name/.docker/config/magento.ssl.conf.dist;
+	sed -i '' -e "s/localhost/$domain\.local/g" $project_name/start;
+fi 
+
+cd $project_name;
+mkdir src;
+
+./init $project_name $php_version;
+
+echo "---"
+read -p "Do you want to install Magento? [n] " -n 1 -r install_magento
+if [ "$install_magento" == "y" ]; then
+    echo "---"
+    read -p "Magento Version to install [2.3.1] " magento_version
+    echo "---"
+    rm -rf src/*
+    
+    if [ "$magento_version" == "" ]; then
+	magento_version="2.3.1"
+    fi
+    docker-compose exec --user root "apache" install-magento2 $magento_version
+fi 
+echo " "
+
+sudo bash -c 'echo -e "'$server_ip'  '$domain'.local" >> /etc/hosts'
+sudo bash -c 'echo -e "'$server_ip'  www.'$domain'.local" >> /etc/hosts'
+
